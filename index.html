@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Panel ESP32 DHT22</title>
+  <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns"></script> <!-- Adaptador de fecha -->
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background-color: #e0f2f1;
+      margin: 0;
+      padding: 20px;
+      text-align: center;
+    }
+    h1 {
+      margin-bottom: 20px;
+      color: #01579b;
+    }
+    .data-container {
+      display: flex;
+      justify-content: center;
+      flex-wrap: wrap;
+      margin-top: 20px;
+    }
+    .data-box {
+      width: 250px;
+      height: 200px;
+      padding: 20px;
+      margin: 10px;
+      border-radius: 8px;
+      box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+      font-size: 18px;
+      background-color: #fff;
+      text-align: center;
+    }
+    .data-box img {
+      max-width: 100px;
+      max-height: 100px;
+      margin-bottom: 10px;
+    }
+    .chart-container {
+      width: 45%;
+      padding: 20px;
+      margin: 10px;
+      border-radius: 8px;
+      box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+      background-color: #fff;
+    }
+    @media (max-width: 768px) {
+      .chart-container {
+        width: 100%;
+      }
+    }
+  </style>
+</head>
+<body>
+  <h1>Panel ESP32 DHT22</h1>
+  <div class="data-container">
+    <div class="data-box" id="temperature-box">
+      <img src="https://cdn-icons-png.flaticon.com/512/566/566675.png" alt="Icono Temperatura">
+      <h2>Temperatura (°C)</h2>
+      <p id="temperature">--</p>
+    </div>
+    <div class="data-box" id="humidity-box">
+      <img src="https://cdn-icons-png.flaticon.com/512/3262/3262966.png" alt="Icono Humedad">
+      <h2>Humedad (%)</h2>
+      <p id="humidity">--</p>
+    </div>
+  </div>
+  <div class="data-container">
+    <div class="chart-container">
+      <canvas id="temperatureChart"></canvas>
+    </div>
+    <div class="chart-container">
+      <canvas id="humidityChart"></canvas>
+    </div>
+  </div>
+  <script>
+    var temperatureData = [];
+    var humidityData = [];
+    var maxDataPoints = 20;
+
+    // Inicializar gráficos de temperatura y humedad
+    var temperatureChartCtx = document.getElementById('temperatureChart').getContext('2d');
+    var humidityChartCtx = document.getElementById('humidityChart').getContext('2d');
+
+    var temperatureChart = new Chart(temperatureChartCtx, {
+      type: 'line',
+      data: {
+        labels: [],
+        datasets: [{
+          label: 'Temperatura (°C)',
+          data: temperatureData,
+          borderColor: 'rgba(255, 99, 132, 1)',
+          backgroundColor: 'rgba(255, 99, 132, 0.2)',
+          borderWidth: 1,
+          pointRadius: 5,
+          pointBackgroundColor: 'rgba(255, 99, 132, 1)',
+          pointBorderColor: '#fff',
+          pointHoverRadius: 8,
+          pointHoverBackgroundColor: '#fff',
+          pointHoverBorderColor: 'rgba(255, 99, 132, 1)'
+        }]
+      },
+      options: {
+        animation: {
+          duration: 0
+        },
+        scales: {
+          y: {
+            beginAtZero: true,
+            max: 50
+          },
+          x: {
+            type: 'time',
+            time: {
+              unit: 'minute',
+              tooltipFormat: 'HH:mm:ss'
+            },
+            ticks: {
+              autoSkip: true,
+              maxTicksLimit: 10
+            }
+          }
+        }
+      }
+    });
+
+    var humidityChart = new Chart(humidityChartCtx, {
+      type: 'line',
+      data: {
+        labels: [],
+        datasets: [{
+          label: 'Humedad (%)',
+          data: humidityData,
+          borderColor: 'rgba(54, 162, 235, 1)',
+          backgroundColor: 'rgba(54, 162, 235, 0.2)',
+          borderWidth: 1,
+          pointRadius: 5,
+          pointBackgroundColor: 'rgba(54, 162, 235, 1)',
+          pointBorderColor: '#fff',
+          pointHoverRadius: 8,
+          pointHoverBackgroundColor: '#fff',
+          pointHoverBorderColor: 'rgba(54, 162, 235, 1)'
+        }]
+      },
+      options: {
+        animation: {
+          duration: 0
+        },
+        scales: {
+          y: {
+            beginAtZero: true,
+            max: 100
+          },
+          x: {
+            type: 'time',
+            time: {
+              unit: 'minute',
+              tooltipFormat: 'HH:mm:ss'
+            },
+            ticks: {
+              autoSkip: true,
+              maxTicksLimit: 10
+            }
+          }
+        }
+      }
+    });
+
+    // Función para obtener datos del script de Google Apps
+    async function fetchData() {
+      try {
+        const response = await fetch('https://script.google.com/macros/s/AKfycbxa9hEKT_kAqJtmYdmGUISK7ZRAuzYiJZU4wTFWPgAumij7zEkZ2MhJSzkddwzzvWjvag/exec');
+        const data = await response.json();
+
+        const latestData = data[data.length - 1]; // Obtenemos el último registro
+
+        // Actualizamos los valores mostrados
+        $('#temperature').text(latestData.temperature.toFixed(2));
+        $('#humidity').text(latestData.humidity.toFixed(2));
+
+        // Añadimos la hora actual a las etiquetas
+        var now = new Date();
+
+        if (temperatureData.length >= maxDataPoints) {
+          temperatureData.shift();
+          temperatureChart.data.labels.shift();
+        }
+        if (humidityData.length >= maxDataPoints) {
+          humidityData.shift();
+          humidityChart.data.labels.shift();
+        }
+
+        // Añadimos los nuevos datos y etiquetas
+        temperatureData.push({ x: now, y: latestData.temperature });
+        humidityData.push({ x: now, y: latestData.humidity });
+        temperatureChart.data.labels.push(now);
+        humidityChart.data.labels.push(now);
+
+        // Actualizar las gráficas
+        temperatureChart.update();
+        humidityChart.update();
+      } catch (error) {
+        console.error('Error al obtener datos:', error);
+      }
+    }
+
+    $(document).ready(function() {
+      fetchData();
+      setInterval(fetchData, 2000); // Actualizar cada 2 segundos
+    });
+  </script>
+</body>
+</html>
